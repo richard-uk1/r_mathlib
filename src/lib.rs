@@ -19,8 +19,11 @@ const LN_2PI: f64 = 1.8378770664093453; // (2.0 * PI).ln()
 const LN2: f64 = 0.6931471805599453; // (2.0).ln()
 const PGAMMA_SCALE_FACTOR: f64 = 1.157920892373162e+77;
 const M_CUTOFF: f64 = LN2 * (f64::MAX_EXP as f64) / f64::EPSILON;
+const MIN_EXP: f64 = f64::MIN_EXP as f64;
 
 /// Evaluate the probability density function of the normal distribution at x.
+///
+/// NOTE naive implementation (not R)
 pub fn dnorm(x: f64, mean: f64, sd: f64, log: bool) -> f64 {
     let out = (sd * FRAC_1_SQRT_2PI).recip() * (-0.5 * ((x - mean) / sd).powi(2)).exp();
     if log {
@@ -31,10 +34,12 @@ pub fn dnorm(x: f64, mean: f64, sd: f64, log: bool) -> f64 {
 }
 
 /// Evaluate the culmulative distribution function of the normal distribution at x.
+///
+/// NOTE naive implementation (not R)
 pub fn pnorm(q: f64, mean: f64, sd: f64, lower_tail: bool, log: bool) -> f64 {
-    let mut out = 0.5 * (1.0 + erf((q - mean) / (sd * 2.0f64.sqrt())));
+    let mut out = 0.5 * (1. + erf((q - mean) / (sd * 2f64.sqrt())));
     if !lower_tail {
-        out = 1.0 - out;
+        out = 1. - out;
     }
     if log {
         out.ln()
@@ -44,11 +49,13 @@ pub fn pnorm(q: f64, mean: f64, sd: f64, lower_tail: bool, log: bool) -> f64 {
 }
 
 /// Evaluate the quantile function of the normal distribution at probability p.
+///
+/// NOTE naive implementation (not R)
 pub fn qnorm(mut p: f64, mean: f64, sd: f64, lower_tail: bool, log: bool) -> f64 {
     if !lower_tail {
-        p = 1.0 - p;
+        p = 1. - p;
     }
-    let out = mean + sd * 2.0f64.sqrt() * inverf(2.0 * p - 1.0);
+    let out = mean + sd * 2.0f64.sqrt() * inverf(2. * p - 1.);
     if log {
         out.ln()
     } else {
@@ -187,7 +194,16 @@ pub fn pbeta(x: f64, a: f64, b: f64, lower_tail: bool, log_p: bool) -> f64 {
         w
     }
 }
-//qbeta todo
+
+pub fn qbeta(alpha: f64, p: f64, q: f64, lower_tail: bool, log_p: bool) -> f64 {
+    if p.is_nan() || q.is_nan() || alpha.is_nan() {
+        p + q + alpha
+    } else if p < 0.0 || q < 0.0 {
+        f64::NAN
+    } else {
+        qbeta_raw(alpha, p, q, lower_tail, log_p, -5.0, 4).0
+    }
+}
 
 /// Calculate the probability density function for the F distribution.
 pub fn df(x: f64, m: f64, n: f64, log: bool) -> f64 {
@@ -291,14 +307,35 @@ pub fn pf(x: f64, df1: f64, df2: f64, ncp: Option<f64>, lower_tail: bool, log_p:
         }
     }
 }
-// qf
+
+pub fn qf(p: f64, df1: f64, df2: f64, lower_tail: bool, log_p: bool) -> f64 {
+    if p.is_nan() || df1.is_nan() || df2.is_nan() {
+        p + df1 + df2
+    } else if df1 <= 0.0 || df2 <= 0.0 {
+        f64::NAN
+    } else if let Some(v) = r_q_p01_boundaries(p, 0.0, f64::INFINITY, lower_tail, log_p) {
+        v
+    } else if df1 <= df2 && df2 > 4e5 {
+        if df1 == f64::INFINITY {
+            1.0
+        } else {
+            qchisq(p, df1, lower_tail, log_p) / df1
+        }
+    } else if df1 > 4e5 {
+        df2 / qchisq(p, df2, !lower_tail, log_p)
+    } else {
+        (1.0 / qbeta(p, df2 * 0.5, df1 * 0.5, !lower_tail, log_p) - 1.0) * (df2 / df1)
+    }
+}
 
 // dchisq
 pub fn pchisq(x: f64, df: f64, lower_tail: bool, log_p: bool) -> f64 {
     pgamma(x, df * 0.5, 2.0, lower_tail, log_p)
 }
 
-// qchisq
+pub fn qchisq(p: f64, df: f64, lower_tail: bool, log_p: bool) -> f64 {
+    todo!()
+}
 
 /// Calculates the probability density function for the gamma distribution at x.
 pub fn dgamma(x: f64, shape: f64, scale: f64, log: bool) -> f64 {
@@ -368,9 +405,92 @@ pub fn pgamma(x: f64, alph: f64, scale: f64, lower_tail: bool, log_p: bool) -> f
 }
 // qgamma
 
-// dpois
-// ppois
-// qpois
+/// Return the PDF for the poisson distribution at x.
+pub fn dpois(x: f64, lambda: f64, give_log: bool) -> f64 {
+    if !close_int(x) {
+        eprintln!(
+            "warn: poisson should be evaluated at an integer, found {}",
+            x
+        );
+    }
+    if x.is_nan() || lambda.is_nan() {
+        x + lambda
+    } else if lambda < 0.0 {
+        f64::NAN
+    } else if x < 0.0 || !x.is_finite() {
+        r_d__0(give_log)
+    } else {
+        dpois_raw(x.round(), lambda, give_log)
+    }
+}
+
+/// Return the CDF for the poisson distribution at x.
+pub fn ppois(x: f64, lambda: f64, lower_tail: bool, log_p: bool) -> f64 {
+    if x.is_nan() || lambda.is_nan() {
+        x + lambda
+    } else if lambda < 0.0 {
+        f64::NAN
+    } else if x < 0.0 {
+        r_dt_0(lower_tail, log_p)
+    } else if lambda == 0.0 {
+        r_dt_1(lower_tail, log_p)
+    } else if x == f64::INFINITY {
+        r_dt_1(lower_tail, log_p)
+    } else {
+        let x = (x + 1e-7).floor();
+        pgamma(lambda, x + 1.0, 1.0, !lower_tail, log_p)
+    }
+}
+
+/// Evaluates the quantile function for the poisson distribution at p.
+pub fn qpois(mut p: f64, lambda: f64, lower_tail: bool, log_p: bool) -> f64 {
+    if p.is_nan() || lambda.is_nan() {
+        p + lambda
+    } else if !lambda.is_finite() || lambda < 0.0 || !is_prob(p, log_p) {
+        f64::NAN
+    } else if lambda == 0.0 || p == r_dt_0(lower_tail, log_p) {
+        0.0
+    } else if p == r_dt_1(lower_tail, log_p) {
+        f64::INFINITY
+    } else {
+        let mu = lambda;
+        let sigma = lambda.sqrt();
+        let gamma = sigma.recip();
+        if !lower_tail || log_p {
+            p = r_dt_qiv(p, lower_tail, log_p);
+            if p == 0.0 {
+                return 0.0;
+            }
+            if p == 1.0 {
+                return f64::INFINITY;
+            }
+        }
+
+        if p + 1.01 * f64::EPSILON >= 1.0 {
+            return f64::INFINITY;
+        }
+        let z = qnorm(p, 0.0, 1.0, true, false);
+        let mut y = mu + sigma * (z + gamma * (z * z - 1.0) / 6.0);
+        let z = ppois(y, lambda, true, false);
+        p *= 1.0 - 64.0 * f64::EPSILON;
+
+        if lambda < 1e5 {
+            do_search(y, &mut z, p, lambda, 1.0)
+        } else {
+            let mut incr = (y * 0.001).floor();
+            let mut old_incr;
+            loop {
+                old_incr = incr;
+                y = do_search(y, &mut z, p, lambda, incr);
+                incr = (incr * 0.01).floor().max(1.0);
+                if old_incr > 1.0 && incr > lambda * 1e-15 {
+                    break;
+                }
+            }
+            y
+        }
+    }
+}
 
 /// Evaluates the "deviance part" from Catherine Loader's algorithm.
 fn bd0(x: f64, np: f64) -> f64 {
@@ -1303,5 +1423,410 @@ fn dpnorm(mut x: f64, mut lower_tail: bool, lp: f64) -> f64 {
         sum.recip()
     } else {
         dnorm(x, 0.0, 1.0, false) / lp.exp()
+    }
+}
+
+/// Is x an int to 7 significant figures or 7 decimal places?
+#[inline]
+fn close_int(x: f64) -> bool {
+    (x - x.round()).abs() < 1e-7 * x.abs().max(1.0)
+}
+
+/// Is p a probability (in [0, 1]) (or log of one if `log`)
+#[inline]
+fn is_prob(p: f64, log_p: bool) -> bool {
+    if log_p {
+        p <= 0.0
+    } else {
+        0.0 <= p && p <= 1.0
+    }
+}
+
+#[inline]
+fn do_search(mut y: f64, z: &mut f64, p: f64, lambda: f64, incr: f64) -> f64 {
+    if *z >= p {
+        loop {
+            if y == 0.0 {
+                return y;
+            }
+            *z = ppois(y - incr, lambda, true, false);
+            if *z < p {
+                return y;
+            }
+            y = (y - incr).max(0.0);
+        }
+    } else {
+        loop {
+            y = y + incr;
+            *z = ppois(y, lambda, true, false);
+            if *z >= p {
+                return y;
+            }
+        }
+    }
+}
+
+fn qbeta_raw(
+    alpha: f64,
+    p: f64,
+    q: f64,
+    lower_tail: bool,
+    log_p: bool,
+    log_q_cut: f64,
+    n_N: usize,
+) -> (f64, f64) {
+    #[inline]
+    fn return_q_0(give_log_q: bool) -> (f64, f64) {
+        if give_log_q {
+            (f64::NEG_INFINITY, 0.0)
+        } else {
+            (0.0, 1.0)
+        }
+    }
+    #[inline]
+    fn return_q_1(give_log_q: bool) -> (f64, f64) {
+        if give_log_q {
+            (0.0, f64::NEG_INFINITY)
+        } else {
+            (1.0, 0.0)
+        }
+    }
+    #[inline]
+    fn return_q_half(give_log_q: bool) -> (f64, f64) {
+        if give_log_q {
+            (-LN2, -LN2)
+        } else {
+            (0.5, 0.5)
+        }
+    }
+
+    const CONST1: f64 = 2.30753;
+    const CONST2: f64 = 0.27061;
+    const CONST3: f64 = 0.99229;
+    const CONST4: f64 = 0.04481;
+    const VERY_MIN: f64 = f64::MIN * 0.25;
+    const LOG_V_MIN: f64 = LN2 * (MIN_EXP - 2.);
+    const FPU: f64 = 3e-308;
+    const P_HI: f64 = 1. - 2.22e-16;
+    const P_LO: f64 = FPU;
+
+    let give_log_q = log_q_cut == f64::INFINITY;
+    let mut use_log_x = give_log_q;
+    let mut add_n_step = true;
+
+    if alpha == r_dt_0(lower_tail, log_p) {
+        return_q_0(give_log_q)
+    } else if alpha == r_dt_1(lower_tail, log_p) {
+        return_q_0(give_log_q)
+    } else if (log_p && alpha > 0.0) || (!log_p && (alpha < 0.0 || alpha > 1.0)) {
+        (f64::NAN, f64::NAN)
+    } else if p == 0.0 || q == 0.0 || !p.is_finite() || !q.is_finite() {
+        if p == 0.0 && q == 0.0 {
+            if alpha < r_d_half(log_p) {
+                return_q_0(give_log_q)
+            } else if alpha > r_d_half(give_log_q) {
+                return_q_1(give_log_q)
+            } else {
+                return_q_half(give_log_q)
+            }
+        } else if p == 0.0 || p / q == 0.0 {
+            return_q_0(give_log_q)
+        } else if q == 0.0 || q / p == 0.0 {
+            return_q_1(give_log_q)
+        } else {
+            return_q_half(give_log_q)
+        }
+    } else {
+        let p_ = r_dt_qiv(alpha, lower_tail, log_p);
+        let logbeta = lbeta(p, q);
+        let swap_tail = p_ > 0.5;
+        let (a, la, pp, qq) = if swap_tail {
+            (
+                r_dt_civ(alpha, lower_tail, log_p),
+                r_dt_clog(alpha, lower_tail, log_p),
+                q,
+                p,
+            )
+        } else {
+            (p_, r_dt_log(alpha, lower_tail, log_p), p, q)
+        };
+
+        // Initial approximation
+        let acu = 10.0f64
+            .powf(-13.0 - 2.5 / (pp * pp) - 0.5 / (a * a))
+            .max(1e-300);
+        let u0 = (la + pp.ln() + logbeta) / pp;
+        let log_eps_c = LN2 * (1.0 - f64::MANTISSA_DIGITS as f64);
+        let mut r = pp * (1.0 - qq) / (pp + 1.0);
+        let t = 0.2;
+
+        let mut tx = 0.; // dummy value
+        let (xinbta, u) = if (LN2 * MIN_EXP) < u0
+            && u0 < -0.01
+            && u0
+                < (t * log_eps_c
+                    - (pp * (1.0 - qq) * (2.0 - qq) / (2.0 * (pp + 2.0)))
+                        .abs()
+                        .ln()
+                        * 0.5)
+        {
+            r = r * u0.exp();
+            let u = if r > -1.0 { u0 - r.ln_1p() / pp } else { u0 };
+            tx = u.exp();
+            let xinbta = u.exp();
+            use_log_x = true;
+            (xinbta, u)
+        } else {
+            let r = (-2.0 * la).sqrt();
+            let y = r - (CONST1 + CONST2 * r) / (1. + (CONST3 + CONST4 * r) * r);
+            let (xinbta, u) = if pp > 1. && qq > 1. {
+                let r = (y * y - 3.) / 6.;
+                let s = (pp + pp - 1.).recip();
+                let t = (qq + qq - 1.).recip();
+                let h = 2. / (s + t);
+                let w = y * (h + r).sqrt() / h - (t - s) * (r + 5. / 6. - 2. / (3. + h));
+                if w > 300. {
+                    let t = w + w + qq.ln() - pp.ln();
+                    let u = if t <= 18. {
+                        -t.exp().ln_1p()
+                    } else {
+                        -t - (-t).exp()
+                    };
+                    let xinbta = u.exp();
+                    (xinbta, u)
+                } else {
+                    let xinbta = pp / (pp + qq * (w + w).exp());
+                    let u = -(qq / pp * (w + w).exp()).ln_1p();
+                    (xinbta, u)
+                }
+            } else {
+                let r = qq + qq;
+                let t = 1. / (3. * qq.sqrt());
+                let t = r * r_pow_di(1. + t * (-t + y), 3);
+                let s = 4. * pp + r - 2.;
+                if t == 0. || (t < 0. && s >= t) {
+                    let l1ma = if swap_tail {
+                        r_dt_log(alpha, lower_tail, log_p)
+                    } else {
+                        r_dt_clog(alpha, lower_tail, log_p)
+                    };
+                    let xx = (l1ma + qq.ln() + logbeta) / qq;
+                    if xx <= 0. {
+                        let xinbta = -xx.exp_m1();
+                        let u = r_log1_exp(xx);
+                        (xinbta, u)
+                    } else {
+                        (0., f64::NEG_INFINITY)
+                    }
+                } else {
+                    let t = s / t;
+                    if t <= 1. {
+                        let u = (la + pp.ln() + logbeta) / pp;
+                        let xinbta = u.exp();
+                        (xinbta, u)
+                    } else {
+                        let xinbta = 1. - 2. / (t + 1.);
+                        let u = (-2. / (t + 1.)).ln_1p();
+                        (xinbta, u)
+                    }
+                }
+            };
+
+            if (swap_tail && u >= -log_q_cut.exp())
+                || (!swap_tail && u >= -(4. * log_q_cut).exp() && pp / qq < 1000.)
+            {
+                swap_tail = !swap_tail;
+                if swap_tail {
+                    a = r_dt_civ(alpha, lower_tail, log_p);
+                    la = r_dt_clog(alpha, lower_tail, log_p);
+                    pp = q;
+                    qq = p;
+                } else {
+                    a = p_;
+                    la = r_dt_log(alpha, lower_tail, log_p);
+                    pp = p;
+                    qq = q;
+                }
+                u = r_log1_exp(u);
+                xinbta = u.exp();
+            }
+
+            if !use_log_x {
+                use_log_x = u < log_q_cut;
+            }
+            let bad_u = !u.is_finite();
+            let bad_init = bad_u || xinbta > P_HI;
+            let mut u_n = 1.;
+            tx = xinbta;
+
+            if bad_u || u < log_q_cut {
+                let w = pbeta(VERY_MIN, pp, qq, true, log_p);
+                let test = if log_p { la } else { a };
+                if w > test {
+                    if log_p || (w - a).abs() < (0. - a).abs() {
+                        tx = VERY_MIN;
+                        u_n = LOG_V_MIN;
+                    } else {
+                        tx = 0.;
+                        u_n = f64::NEG_INFINITY;
+                    };
+                    use_log_x = log_p;
+                    add_n_step = false;
+                    return todo!();
+                } else {
+                    if u < LOG_V_MIN {
+                        u = LOG_V_MIN;
+                        xinbta = VERY_MIN;
+                    }
+                }
+            }
+
+            if bad_init && !(use_log_x && tx > 0.) {
+                if u == f64::NEG_INFINITY {
+                    u = LN2 * MIN_EXP;
+                    xinbta = f64::MIN;
+                } else {
+                    xinbta = if xinbta > 1.1 {
+                        0.5
+                    } else {
+                        if xinbta < P_LO {
+                            u.exp()
+                        } else {
+                            P_HI
+                        }
+                    };
+                    if bad_u {
+                        u = xinbta.ln();
+                    }
+                }
+            }
+            (xinbta, u)
+        };
+
+        // start of newton
+        let r = 1. - pp;
+        let t = 1. - qq;
+        let mut wprev = 0.;
+        let mut prev = 1.;
+        let mut adj: f64 = 1.;
+
+        if use_log_x {
+            'outer: for i_pb in 0..1_000 {
+                let y = pbeta(xinbta, pp, qq, true, true);
+                let w = if y == f64::NEG_INFINITY {
+                    0.
+                } else {
+                    (y - la) * (y - u + logbeta + r * u + t * r_log1_exp(u)).exp()
+                };
+                if !w.is_finite() {
+                    break;
+                }
+                if i_pb >= n_N && w * wprev <= 0. {
+                    prev = adj.abs().max(FPU);
+                }
+                let g = 1.;
+                for i_inn in 0..1_000 {
+                    adj = g * w;
+                    if adj.abs() < prev {
+                        u_n = u - adj;
+                        if u_n <= 0. {
+                            if prev <= -acu || w.abs() <= acu {
+                                break 'outer;
+                            }
+                            break;
+                        }
+                    }
+                    g /= 3.;
+                }
+                let D = adj.abs().min((u_n - u).abs());
+                if D <= 4e-16 * (u_n + u).abs() {
+                    break 'outer;
+                }
+                u = u_n;
+                xinbta = u.exp();
+                wprev = w;
+            }
+        } else {
+            'outer: for i_pb in 0..1_000 {
+                let y = pbeta(xinbta, pp, qq, true, log_p);
+                if !y.is_finite() && !(log_p && y == f64::NEG_INFINITY) {
+                    return (f64::NAN, f64::NAN);
+                }
+                let w = if log_p {
+                    (y - la) * (y + logbeta + r * xinbta.ln() + t * (-xinbta).ln_1p()).exp()
+                } else {
+                    (y - a) * (logbeta + r * xinbta.ln() + t * (-xinbta).ln_1p()).exp()
+                };
+                if i_pb >= n_N && w * wprev <= 0. {
+                    prev = adj.abs().max(FPU);
+                }
+                let g = 1.;
+                for i_inn in 0..1000 {
+                    let adj = g * w;
+                    if i_pb < n_N || adj.abs() < prev {
+                        let tx = xinbta - adj;
+                        if 0. <= tx && tx <= 1. {
+                            if prev <= acu || w.abs() <= acu {
+                                break 'outer;
+                            }
+                            if tx != 0. && tx != 1. {
+                                break;
+                            }
+                        }
+                    }
+                    g /= 3.;
+                }
+                if (tx - xinbta).abs() <= 4e-16 * (tx + xinbta) {
+                    break;
+                }
+                if tx == 0. {
+                    break;
+                }
+                wprev = w;
+            }
+        }
+
+        let log_ = log_p || use_log_x;
+        if (log_ && y == f64::NEG_INFINITY) || (!log_ && y == 0.) {
+            let w = pbeta(VERY_MIN, pp, qq, true, log_);
+            if log_ || (w - a).abs() <= (y - a).abs() {
+                tx = VERY_MIN;
+                u_n = LOG_V_MIN;
+            }
+            add_N_step = false;
+        }
+
+        if give_log_qq {
+            let r = r_log1_exp(u_n);
+            if swap_tail {
+                (r, u_n)
+            } else {
+                (u_n, r)
+            }
+        } else {
+            if use_log_x {
+                if add_N_step {
+                    xinbta = u_n.exp();
+                    let y = pbeta(xinbta, pp, qq, true, log_p);
+                    let w = if log_p {
+                        (y - la) * (y + logbeta + r * xinbta.ln() + t * (-xinbta).ln_1p()).exp()
+                    } else {
+                        (y - a) * (logbeta + r * xinbta.ln() + t * (-xinbta).ln_1p()).exp()
+                    };
+                    tx = xinbta - w;
+                } else {
+                    return if swap_tail {
+                        (-u_n.exp_m1(), u_n.exp())
+                    } else {
+                        (u_n.exp(), -u_n.exp_m1())
+                    };
+                }
+            }
+            if swap_tail {
+                (1. - tx, tx)
+            } else {
+                (tx, 1. - tx)
+            }
+        }
     }
 }
