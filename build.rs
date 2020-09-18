@@ -163,6 +163,7 @@ fn main() {
     let c_test = OsString::from("c");
     cc::Build::new()
         .define("MATHLIB_STANDALONE", "1")
+        .flag_if_supported("-std=c99")
         .include("R/nmath")
         .include("R/include")
         .include("R/config")
