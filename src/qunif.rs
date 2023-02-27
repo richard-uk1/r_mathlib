@@ -128,7 +128,11 @@ pub unsafe extern "C" fn qunif(
     }
     return a
         + (if log_p != 0 {
-            if lower_tail != 0 { exp(p) } else { -expm1(p) }
+            if lower_tail != 0 {
+                exp(p)
+            } else {
+                -expm1(p)
+            }
         } else {
             if lower_tail != 0 {
                 p

@@ -1,185 +1,75 @@
-#![allow(
-    dead_code,
-    mutable_transmutes,
-    non_camel_case_types,
-    non_snake_case,
-    non_upper_case_globals,
-    unused_assignments,
-    unused_mut
-)]
-extern "C" {
-    fn printf(_: *const libc::c_char, _: ...) -> libc::c_int;
-    fn Rf_bratio(
-        a: libc::c_double,
-        b: libc::c_double,
-        x: libc::c_double,
-        y: libc::c_double,
-        w: *mut libc::c_double,
-        w1: *mut libc::c_double,
-        ierr: *mut libc::c_int,
-        log_p: libc::c_int,
-    );
-    fn R_finite(_: libc::c_double) -> libc::c_int;
-}
-#[no_mangle]
-pub unsafe extern "C" fn pbeta_raw(
-    mut x: libc::c_double,
-    mut a: libc::c_double,
-    mut b: libc::c_double,
-    mut lower_tail: libc::c_int,
-    mut log_p: libc::c_int,
-) -> libc::c_double {
-    if a == 0 as libc::c_int as libc::c_double
-        || b == 0 as libc::c_int as libc::c_double
-        || R_finite(a) == 0
-        || R_finite(b) == 0
-    {
-        if a == 0 as libc::c_int as libc::c_double && b == 0 as libc::c_int as libc::c_double {
-            return if log_p != 0 {
-                -0.693147180559945309417232121458f64
+use crate::{
+    toms708::rf_bratio,
+    util::{r_dt_0, r_dt_1},
+};
+
+pub fn pbeta_raw(x: f64, a: f64, b: f64, lower_tail: bool, log_p: bool) -> f64 {
+    if a == 0. || b == 0. || !a.is_finite() || !b.is_finite() {
+        if a == 0. && b == 0. {
+            return if log_p {
+                -0.693147180559945309417232121458 // M_LN2
             } else {
-                0.5f64
+                0.5
             };
         }
-        if a == 0 as libc::c_int as libc::c_double || a / b == 0 as libc::c_int as libc::c_double {
-            return if lower_tail != 0 {
-                if log_p != 0 {
-                    0.0f64
-                } else {
-                    1.0f64
-                }
-            } else if log_p != 0 {
-                -1.0f64 / 0.0f64
-            } else {
-                0.0f64
-            };
+        if a == 0. || a / b == 0. {
+            return r_dt_1(lower_tail, log_p);
         }
-        if b == 0 as libc::c_int as libc::c_double || b / a == 0 as libc::c_int as libc::c_double {
-            return if lower_tail != 0 {
-                if log_p != 0 {
-                    -1.0f64 / 0.0f64
-                } else {
-                    0.0f64
-                }
-            } else if log_p != 0 {
-                0.0f64
-            } else {
-                1.0f64
-            };
+        if b == 0. || b / a == 0. {
+            return r_dt_0(lower_tail, log_p);
         }
-        if x < 0.5f64 {
-            return if lower_tail != 0 {
-                if log_p != 0 {
-                    -1.0f64 / 0.0f64
-                } else {
-                    0.0f64
-                }
-            } else if log_p != 0 {
-                0.0f64
-            } else {
-                1.0f64
-            };
+        if x < 0.5 {
+            return r_dt_0(lower_tail, log_p);
         } else {
-            return if lower_tail != 0 {
-                if log_p != 0 {
-                    0.0f64
-                } else {
-                    1.0f64
-                }
-            } else if log_p != 0 {
-                -1.0f64 / 0.0f64
-            } else {
-                0.0f64
-            };
+            return r_dt_1(lower_tail, log_p);
         }
     }
-    let mut x1: libc::c_double = 0.5f64 - x + 0.5f64;
-    let mut w: libc::c_double = 0.;
-    let mut wc: libc::c_double = 0.;
-    let mut ierr: libc::c_int = 0;
-    Rf_bratio(a, b, x, x1, &mut w, &mut wc, &mut ierr, log_p);
-    if ierr != 0 && ierr != 11 as libc::c_int && ierr != 14 as libc::c_int {
-        printf(
-            b"pbeta_raw(%g, a=%g, b=%g, ..) -> bratio() gave error code %d\0" as *const u8
-                as *const libc::c_char,
-            x,
-            a,
-            b,
-            ierr,
+    if x >= 1. {
+        return r_dt_1(lower_tail, log_p);
+    }
+
+    let x1 = 0.5 - x + 0.5;
+    let mut w = 0.;
+    let mut wc = 0.;
+    let mut ierr = 0;
+    rf_bratio(a, b, x, x1, &mut w, &mut wc, &mut ierr, log_p);
+    if ierr != 0 && ierr != 11 && ierr != 14 {
+        println!(
+            "pbeta_raw({}, a={}, b={}, ..) -> bratio() gave error code {}",
+            x, a, b, ierr,
         );
     }
-    return if lower_tail != 0 { w } else { wc };
+    return if lower_tail { w } else { wc };
 }
-#[no_mangle]
-pub unsafe extern "C" fn pbeta(
-    mut x: libc::c_double,
-    mut a: libc::c_double,
-    mut b: libc::c_double,
-    mut lower_tail: libc::c_int,
-    mut log_p: libc::c_int,
-) -> libc::c_double {
-    if x.is_nan() as i32 != 0 as libc::c_int
-        || a.is_nan() as i32 != 0 as libc::c_int
-        || b.is_nan() as i32 != 0 as libc::c_int
-    {
+
+pub fn pbeta(x: f64, a: f64, b: f64, lower_tail: bool, log_p: bool) -> f64 {
+    if x.is_nan() || a.is_nan() || b.is_nan() {
         return x + a + b;
     }
-    if a < 0 as libc::c_int as libc::c_double || b < 0 as libc::c_int as libc::c_double {
-        if 1 as libc::c_int > 1 as libc::c_int {
-            let mut msg: *mut libc::c_char =
-                b"\0" as *const u8 as *const libc::c_char as *mut libc::c_char;
-            match 1 as libc::c_int {
-                1 => {
-                    msg = b"argument out of domain in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                2 => {
-                    msg = b"value out of range in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                4 => {
-                    msg = b"convergence failed in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                8 => {
-                    msg = b"full precision may not have been achieved in '%s'\n\0" as *const u8
-                        as *const libc::c_char as *mut libc::c_char;
-                }
-                16 => {
-                    msg = b"underflow occurred in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                _ => {}
-            }
-            printf(msg, b"\0" as *const u8 as *const libc::c_char);
-        }
-        return 0.0f64 / 0.0f64;
+    if a < 0. || b < 0. {
+        return f64::NAN;
     }
-    if x <= 0 as libc::c_int as libc::c_double {
-        return if lower_tail != 0 {
-            if log_p != 0 {
-                -1.0f64 / 0.0f64
-            } else {
-                0.0f64
-            }
-        } else if log_p != 0 {
-            0.0f64
-        } else {
-            1.0f64
-        };
-    }
-    if x >= 1 as libc::c_int as libc::c_double {
-        return if lower_tail != 0 {
-            if log_p != 0 {
-                0.0f64
-            } else {
-                1.0f64
-            }
-        } else if log_p != 0 {
-            -1.0f64 / 0.0f64
-        } else {
-            0.0f64
-        };
+
+    if x <= 0. {
+        return r_dt_0(lower_tail, log_p);
     }
     return pbeta_raw(x, a, b, lower_tail, log_p);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pbeta() {
+        let tests = [
+            //(0.1, 10., 0.4, true, false, 2.),
+            (0.1, 2., 4., true, false, 0.08146),
+            (0.4, 7., 14., false, false, 0.25),
+            (0.4, 7., 14., true, false, 0.75),
+        ];
+        for (x, a, b, lower_tail, log_p, output) in tests {
+            let res = super::pbeta(x, a, b, lower_tail, log_p);
+            let err = (res - output).abs();
+            assert!(err < 1e7, "abs({res} - {output}) = {} </ 1e7", err);
+        }
+    }
 }

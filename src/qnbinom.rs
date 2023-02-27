@@ -249,16 +249,32 @@ pub unsafe extern "C" fn qnbinom(
             0.5f64 - p + 0.5f64
         };
         if p == (if lower_tail != 0 {
-            if log_p != 0 { -1.0f64 / 0.0f64 } else { 0.0f64 }
+            if log_p != 0 {
+                -1.0f64 / 0.0f64
+            } else {
+                0.0f64
+            }
         } else {
-            if log_p != 0 { 0.0f64 } else { 1.0f64 }
+            if log_p != 0 {
+                0.0f64
+            } else {
+                1.0f64
+            }
         }) {
             return 0 as libc::c_int as libc::c_double;
         }
         if p == (if lower_tail != 0 {
-            if log_p != 0 { 0.0f64 } else { 1.0f64 }
+            if log_p != 0 {
+                0.0f64
+            } else {
+                1.0f64
+            }
         } else {
-            if log_p != 0 { -1.0f64 / 0.0f64 } else { 0.0f64 }
+            if log_p != 0 {
+                -1.0f64 / 0.0f64
+            } else {
+                0.0f64
+            }
         }) {
             return 1.0f64 / 0.0f64;
         }

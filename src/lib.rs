@@ -118,4 +118,5 @@ pub mod stirlerr;
 pub mod sunif;
 pub mod test;
 pub mod toms708;
+mod util;
 pub mod wilcox;

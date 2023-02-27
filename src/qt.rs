@@ -277,7 +277,11 @@ pub unsafe extern "C" fn qt(
     if neg as u64 != 0 {
         P = 2 as libc::c_int as libc::c_double
             * (if log_p != 0 {
-                if lower_tail != 0 { P } else { -expm1(p) }
+                if lower_tail != 0 {
+                    P
+                } else {
+                    -expm1(p)
+                }
             } else {
                 if lower_tail != 0 {
                     p
@@ -288,7 +292,11 @@ pub unsafe extern "C" fn qt(
     } else {
         P = 2 as libc::c_int as libc::c_double
             * (if log_p != 0 {
-                if lower_tail != 0 { -expm1(p) } else { P }
+                if lower_tail != 0 {
+                    -expm1(p)
+                } else {
+                    P
+                }
             } else {
                 if lower_tail != 0 {
                     0.5f64 - p + 0.5f64

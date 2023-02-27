@@ -1,185 +1,65 @@
-#![allow(
-    dead_code,
-    mutable_transmutes,
-    non_camel_case_types,
-    non_snake_case,
-    non_upper_case_globals,
-    unused_assignments,
-    unused_mut
-)]
-extern "C" {
-    fn exp(_: libc::c_double) -> libc::c_double;
-    fn log(_: libc::c_double) -> libc::c_double;
-    fn expm1(_: libc::c_double) -> libc::c_double;
-    fn sqrt(_: libc::c_double) -> libc::c_double;
-    fn fabs(_: libc::c_double) -> libc::c_double;
-    fn printf(_: *const libc::c_char, _: ...) -> libc::c_int;
-}
-#[no_mangle]
-pub unsafe extern "C" fn qnorm5(
-    mut p: libc::c_double,
-    mut mu: libc::c_double,
-    mut sigma: libc::c_double,
-    mut lower_tail: libc::c_int,
-    mut log_p: libc::c_int,
-) -> libc::c_double {
-    let mut p_: libc::c_double = 0.;
-    let mut q: libc::c_double = 0.;
-    let mut r: libc::c_double = 0.;
-    let mut val: libc::c_double = 0.;
-    if p.is_nan() as i32 != 0 as libc::c_int
-        || mu.is_nan() as i32 != 0 as libc::c_int
-        || sigma.is_nan() as i32 != 0 as libc::c_int
-    {
+pub fn qnorm5(p: f64, mu: f64, sigma: f64, lower_tail: bool, log_p: bool) -> f64 {
+    let mut r: f64;
+    let mut val: f64;
+    if p.is_nan() || mu.is_nan() || sigma.is_nan() {
         return p + mu + sigma;
     }
-    if log_p != 0 {
-        if p > 0 as libc::c_int as libc::c_double {
-            if 1 as libc::c_int > 1 as libc::c_int {
-                let mut msg: *mut libc::c_char =
-                    b"\0" as *const u8 as *const libc::c_char as *mut libc::c_char;
-                match 1 as libc::c_int {
-                    1 => {
-                        msg = b"argument out of domain in '%s'\n\0" as *const u8
-                            as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    2 => {
-                        msg = b"value out of range in '%s'\n\0" as *const u8 as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    4 => {
-                        msg = b"convergence failed in '%s'\n\0" as *const u8 as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    8 => {
-                        msg = b"full precision may not have been achieved in '%s'\n\0" as *const u8
-                            as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    16 => {
-                        msg = b"underflow occurred in '%s'\n\0" as *const u8 as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    _ => {}
-                }
-                printf(msg, b"\0" as *const u8 as *const libc::c_char);
-            }
-            return 0.0f64 / 0.0f64;
+    if log_p {
+        if p > 0 as libc::c_int as f64 {
+            return f64::NAN;
         }
-        if p == 0 as libc::c_int as libc::c_double {
-            return if lower_tail != 0 {
+        if p == 0 as libc::c_int as f64 {
+            return if lower_tail {
                 1.0f64 / 0.0f64
             } else {
                 -1.0f64 / 0.0f64
             };
         }
         if p == -1.0f64 / 0.0f64 {
-            return if lower_tail != 0 {
+            return if lower_tail {
                 -1.0f64 / 0.0f64
             } else {
                 1.0f64 / 0.0f64
             };
         }
     } else {
-        if p < 0 as libc::c_int as libc::c_double || p > 1 as libc::c_int as libc::c_double {
-            if 1 as libc::c_int > 1 as libc::c_int {
-                let mut msg_0: *mut libc::c_char =
-                    b"\0" as *const u8 as *const libc::c_char as *mut libc::c_char;
-                match 1 as libc::c_int {
-                    1 => {
-                        msg_0 = b"argument out of domain in '%s'\n\0" as *const u8
-                            as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    2 => {
-                        msg_0 = b"value out of range in '%s'\n\0" as *const u8
-                            as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    4 => {
-                        msg_0 = b"convergence failed in '%s'\n\0" as *const u8
-                            as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    8 => {
-                        msg_0 = b"full precision may not have been achieved in '%s'\n\0"
-                            as *const u8 as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    16 => {
-                        msg_0 = b"underflow occurred in '%s'\n\0" as *const u8
-                            as *const libc::c_char
-                            as *mut libc::c_char;
-                    }
-                    _ => {}
-                }
-                printf(msg_0, b"\0" as *const u8 as *const libc::c_char);
-            }
-            return 0.0f64 / 0.0f64;
+        if p < 0 as libc::c_int as f64 || p > 1 as libc::c_int as f64 {
+            return f64::NAN;
         }
-        if p == 0 as libc::c_int as libc::c_double {
-            return if lower_tail != 0 {
+        if p == 0 as libc::c_int as f64 {
+            return if lower_tail {
                 -1.0f64 / 0.0f64
             } else {
                 1.0f64 / 0.0f64
             };
         }
-        if p == 1 as libc::c_int as libc::c_double {
-            return if lower_tail != 0 {
+        if p == 1 as libc::c_int as f64 {
+            return if lower_tail {
                 1.0f64 / 0.0f64
             } else {
                 -1.0f64 / 0.0f64
             };
         }
     }
-    if sigma < 0 as libc::c_int as libc::c_double {
-        if 1 as libc::c_int > 1 as libc::c_int {
-            let mut msg_1: *mut libc::c_char =
-                b"\0" as *const u8 as *const libc::c_char as *mut libc::c_char;
-            match 1 as libc::c_int {
-                1 => {
-                    msg_1 = b"argument out of domain in '%s'\n\0" as *const u8
-                        as *const libc::c_char as *mut libc::c_char;
-                }
-                2 => {
-                    msg_1 = b"value out of range in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                4 => {
-                    msg_1 = b"convergence failed in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                8 => {
-                    msg_1 = b"full precision may not have been achieved in '%s'\n\0" as *const u8
-                        as *const libc::c_char as *mut libc::c_char;
-                }
-                16 => {
-                    msg_1 = b"underflow occurred in '%s'\n\0" as *const u8 as *const libc::c_char
-                        as *mut libc::c_char;
-                }
-                _ => {}
-            }
-            printf(msg_1, b"\0" as *const u8 as *const libc::c_char);
-        }
-        return 0.0f64 / 0.0f64;
+    if sigma < 0 as libc::c_int as f64 {
+        return f64::NAN;
     }
-    if sigma == 0 as libc::c_int as libc::c_double {
+    if sigma == 0 as libc::c_int as f64 {
         return mu;
     }
-    p_ = if log_p != 0 {
-        if lower_tail != 0 {
-            exp(p)
+    let p_ = if log_p {
+        if lower_tail {
+            p.exp()
         } else {
-            -expm1(p)
+            -p.exp_m1()
         }
-    } else if lower_tail != 0 {
+    } else if lower_tail {
         p
     } else {
         0.5f64 - p + 0.5f64
     };
-    q = p_ - 0.5f64;
-    if fabs(q) <= 0.425f64 {
+    let q = p_ - 0.5f64;
+    if q.abs() <= 0.425f64 {
         r = 0.180625f64 - q * q;
         val = q
             * (((((((r * 2509.0809287301226727f64 + 33430.575583588128105f64) * r
@@ -207,14 +87,14 @@ pub unsafe extern "C" fn qnorm5(
                 * r
                 + 1.0f64);
     } else {
-        if q > 0 as libc::c_int as libc::c_double {
-            r = if log_p != 0 {
-                if lower_tail != 0 {
-                    -expm1(p)
+        if q > 0 as libc::c_int as f64 {
+            r = if log_p {
+                if lower_tail {
+                    -p.exp_m1()
                 } else {
-                    exp(p)
+                    p.exp()
                 }
-            } else if lower_tail != 0 {
+            } else if lower_tail {
                 0.5f64 - p + 0.5f64
             } else {
                 p
@@ -222,14 +102,12 @@ pub unsafe extern "C" fn qnorm5(
         } else {
             r = p_;
         }
-        r = sqrt(-if log_p != 0
-            && (lower_tail != 0 && q <= 0 as libc::c_int as libc::c_double
-                || lower_tail == 0 && q > 0 as libc::c_int as libc::c_double)
-        {
+        r = (-if log_p && (lower_tail && q <= 0. || !lower_tail && q > 0.) {
             p
         } else {
-            log(r)
-        });
+            r.ln()
+        })
+        .sqrt();
         if r <= 5.0f64 {
             r += -1.6f64;
             val = (((((((r * 7.7454501427834140764e-4f64 + 0.0227238449892691845833f64) * r

@@ -7,7 +7,7 @@ edition = "2018"
 license = "GPL-2.0-or-later"
 categories = ["mathematics"]
 keywords = ["statistics", "stats", "r", "nmath", "quantile"]
-repository = "https://github.com/derekdreery/r_stats"
+repository = "https://github.com/derekdreery/r_mathlib"
 
 [build-dependencies]
 cc = "1.0.54"

@@ -176,7 +176,11 @@ pub unsafe extern "C" fn qweibull(
                     Rlog1p(-p)
                 }
             } else {
-                if log_p != 0 { p } else { log(p) }
+                if log_p != 0 {
+                    p
+                } else {
+                    log(p)
+                }
             }),
             1.0f64 / shape,
         );

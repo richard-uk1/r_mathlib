@@ -139,9 +139,17 @@ unsafe extern "C" fn qbeta_raw(
     let mut xinbta: libc::c_double = 0.;
     if alpha
         == (if lower_tail != 0 {
-            if log_p != 0 { -1.0f64 / 0.0f64 } else { 0.0f64 }
+            if log_p != 0 {
+                -1.0f64 / 0.0f64
+            } else {
+                0.0f64
+            }
         } else {
-            if log_p != 0 { 0.0f64 } else { 1.0f64 }
+            if log_p != 0 {
+                0.0f64
+            } else {
+                1.0f64
+            }
         })
     {
         if give_log_q as u64 != 0 {
@@ -155,9 +163,17 @@ unsafe extern "C" fn qbeta_raw(
     }
     if alpha
         == (if lower_tail != 0 {
-            if log_p != 0 { 0.0f64 } else { 1.0f64 }
+            if log_p != 0 {
+                0.0f64
+            } else {
+                1.0f64
+            }
         } else {
-            if log_p != 0 { -1.0f64 / 0.0f64 } else { 0.0f64 }
+            if log_p != 0 {
+                -1.0f64 / 0.0f64
+            } else {
+                0.0f64
+            }
         })
     {
         if give_log_q as u64 != 0 {

@@ -211,7 +211,11 @@ pub unsafe extern "C" fn qgeom(
                     Rlog1p(-p)
                 }
             } else {
-                if log_p != 0 { p } else { log(p) }
+                if log_p != 0 {
+                    p
+                } else {
+                    log(p)
+                }
             }) / Rlog1p(-prob)
                 - 1 as libc::c_int as libc::c_double
                 - 1e-12f64,

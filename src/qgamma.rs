@@ -138,7 +138,11 @@ pub unsafe extern "C" fn qchisq_appr(
     alpha = 0.5f64 * nu;
     c = alpha - 1 as libc::c_int as libc::c_double;
     p1 = if lower_tail != 0 {
-        if log_p != 0 { p } else { log(p) }
+        if log_p != 0 {
+            p
+        } else {
+            log(p)
+        }
     } else {
         if log_p != 0 {
             if p > -0.693147180559945309417232121458f64 {
@@ -184,7 +188,11 @@ pub unsafe extern "C" fn qchisq_appr(
                         Rlog1p(-p)
                     }
                 } else {
-                    if log_p != 0 { p } else { log(p) }
+                    if log_p != 0 {
+                        p
+                    } else {
+                        log(p)
+                    }
                 }) - c * log(0.5f64 * ch)
                     + g);
         }
@@ -201,7 +209,11 @@ pub unsafe extern "C" fn qchisq_appr(
                 Rlog1p(-p)
             }
         } else {
-            if log_p != 0 { p } else { log(p) }
+            if log_p != 0 {
+                p
+            } else {
+                log(p)
+            }
         }) + g
             + c * 0.693147180559945309417232121458f64;
         loop {
