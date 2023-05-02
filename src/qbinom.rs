@@ -1,4 +1,4 @@
-use crate::{pbinom::pbinom, qnorm::qnorm5};
+use crate::{pbinom::pbinom, qnorm::qnorm5, util::r_q_p01_boundaries};
 
 pub type C2RustUnnamed = libc::c_uint;
 fn do_search(mut y: f64, z: &mut f64, p: f64, n: f64, pr: f64, incr: f64) -> f64 {
@@ -45,34 +45,18 @@ pub fn qbinom(mut p: f64, n: f64, pr: f64, lower_tail: bool, log_p: bool) -> f64
     if pr < 0. || pr > 1. || n < 0. {
         return f64::NAN;
     }
-    if log_p {
-        if p > 0. {
-            return f64::NAN;
-        }
-        if p == 0. {
-            return if lower_tail { n } else { 0. };
-        }
-        if p == -f64::NEG_INFINITY {
-            return if lower_tail { 0. } else { n };
-        }
-    } else {
-        if p < 0. || p > 1. {
-            return f64::NAN;
-        }
-        if p == 0. {
-            return if lower_tail { 0. } else { n };
-        }
-        if p == 1. {
-            return if lower_tail { n } else { 0. };
-        }
+
+    if let Some(ret) = r_q_p01_boundaries(p, 0., n, lower_tail, log_p) {
+        return ret;
     }
     if pr == 0. || n == 0. {
-        return 0.0;
+        return 0.;
     }
-    let q = 1. - pr;
-    if q == 0. {
+    if pr == 1. {
         return n;
     }
+
+    let q = 1. - pr;
     let mu = n * pr;
     let sigma = (n * pr * q).sqrt();
     let gamma = (q - pr) / sigma;
@@ -87,7 +71,7 @@ pub fn qbinom(mut p: f64, n: f64, pr: f64, lower_tail: bool, log_p: bool) -> f64
             p
         } else {
             0.5 - p + 0.5
-        };
+        }f64;
         if p == 0.0 {
             return 0.0;
         }
@@ -98,7 +82,7 @@ pub fn qbinom(mut p: f64, n: f64, pr: f64, lower_tail: bool, log_p: bool) -> f64
     if p + 1.01 * 2.2204460492503131e-16 >= 1.0 {
         return n;
     }
-    z = qnorm5(p, 0.0f64, 1.0f64, true, false);
+    z = qnorm5(p, 0.0, 1.0, true, false);
     y = (mu + sigma * (z + gamma * (z * z - 1.) / 6.) + 0.5).floor();
     if y > n {
         y = n;
@@ -121,28 +105,37 @@ pub fn qbinom(mut p: f64, n: f64, pr: f64, lower_tail: bool, log_p: bool) -> f64
     return y;
 }
 
+fn q_discrete_01_checks(p: f64, lower_tail: bool, log_p: bool) {
+    // this has some checks in R source that we're gonna skip
+}
+
+fn q_discrete_body(p: f64, lower_tail: bool, log_p: bool) {
+    // TODO from here
+    //let z = qnorm(p, 0., 1., lower_tail, log_p);
+    //let y = mu + sigma * (z + gamma * (z * z - 1) / 6);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn qbinom() {
         let tests = [
             //(0.1, 10., 0.4, true, false, 2.),
-            (0.4, 5., 0.7, true, false, 3.),
-            (0.025, 465., 0.018, true, false, 3.),
-            (0.975, 465., 0.018, true, false, 14.),
-            (0.025, 465., 0.17, true, false, 64.),
-            (0.975, 465., 0.17, true, false, 95.),
-            (0.025, 465., 0.103, true, false, 34.),
-            (0.975, 465., 0.103, true, false, 60.),
-            (0.0003787879, 465., 0.103, true, false, 27.),
-            (0.9996212, 465., 0.103, true, false, 71.),
-            (0.9996212, 465., 0.103, false, false, 27.),
+            (0.4, 5., 0.7, true, false, 3),
+            (0.025, 465., 0.018, true, false, 3),
+            (0.975, 465., 0.018, true, false, 14),
+            (0.025, 465., 0.17, true, false, 64),
+            (0.975, 465., 0.17, true, false, 95),
+            (0.025, 465., 0.103, true, false, 34),
+            (0.975, 465., 0.103, true, false, 60),
+            (0.0003787879, 465., 0.103, true, false, 27),
+            (0.9996212, 465., 0.103, true, false, 71),
+            (0.9996212, 465., 0.103, false, false, 27),
+            (0.975, 465., 0.051, true, false, 33),
         ];
         for (p, size, prob, lower_tail, log_p, output) in tests {
-            let res = super::pbinom(p, size, prob, lower_tail, log_p);
-            let err = (res - output).abs();
-            // should be exact, consider removing this tolerance
-            assert!(err < 1e7, "abs({res} - {output}) = {} </ 1e7", err);
+            let res = super::pbinom(p, size, prob, lower_tail, log_p) as usize;
+            assert_eq!(res, output);
         }
     }
 }
